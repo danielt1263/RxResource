@@ -1,6 +1,6 @@
 import RxSwift
 import XCTest
-@testable import Resourcer
+@testable import RxResourcer
 
 final class ResourcerTests: XCTestCase {
     func testResourceFactory() throws {
