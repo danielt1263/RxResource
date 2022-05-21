@@ -137,6 +137,14 @@ public func showDetailScene<VC, Action>(
 	)
 }
 
+public func assignScene<VC, Action>(
+	disposeBag: DisposeBag,
+	controller: VC,
+	configure: @escaping (DisposeBag, VC) -> Observable<Action>
+) -> (controller: VC, action: Observable<Action>) where VC: UIViewController {
+	return (controller, wrapAction(disposeBag: disposeBag, controller: controller, configure: configure))
+}
+
 private func wrapAction<VC, Action>(
 	disposeBag: DisposeBag,
 	controller: VC,
