@@ -1,6 +1,6 @@
 //
 //  Scene.swift
-//  
+//
 //  Created by Daniel Tartaglia on 19 May 2022.
 //  Copyright © 2021 Daniel Tartaglia. MIT License.
 //
@@ -33,20 +33,24 @@ public func presentScene<VC, Action>(
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
 	Observable.using(
-		Resource.resourceFactory(
-			{ () -> VC in
+		Resource.buildWeak(
+			{ () -> UIViewController in
+				guard let parent = parent else { throw MissingParent() }
 				let control = controller()
 				if let popoverPresentationController = control.popoverPresentationController,
 				   let sourceView = sourceView {
 					popoverPresentationController.sourceView = sourceView
 					popoverPresentationController.sourceRect = sourceView.bounds
 				}
-				return control
-			}(),
-			dispose: { $0.parent?.dismiss(animated: animated) }
+				parent.present(control, animated: animated)
+				return parent
+			},
+			dispose: {
+				$0.presentedViewController?.dismiss(animated: animated)
+			}
 		),
-		observableFactory: Resource.observableFactory { [weak parent] disposeBag, controller in
-			defer { parent?.present(controller, animated: animated) }
+		observableFactory: Resource.createObservable { disposeBag, parent in
+			guard let controller = parent.presentedViewController as? VC else { return .empty() }
 			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
 		}
 	)
@@ -60,18 +64,22 @@ public func presentScene<VC, Action>(
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
 	Observable.using(
-		Resource.resourceFactory(
-			{ () -> VC in
+		Resource.buildWeak(
+			{ () -> UIViewController in
+				guard let parent = parent else { throw MissingParent() }
 				let control = controller()
 				if let popoverPresentationController = control.popoverPresentationController {
 					popoverPresentationController.barButtonItem = barButtonItem
 				}
-				return control
-			}(),
-			dispose: { $0.parent?.dismiss(animated: animated) }
+				parent.present(control, animated: animated)
+				return parent
+			},
+			dispose: {
+				$0.presentedViewController?.dismiss(animated: animated)
+			}
 		),
-		observableFactory: Resource.observableFactory { [weak parent] disposeBag, controller in
-			defer { parent?.present(controller, animated: animated) }
+		observableFactory: Resource.createObservable { disposeBag, parent in
+			guard let controller = parent.presentedViewController as? VC else { return .empty() }
 			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
 		}
 	)
@@ -84,14 +92,19 @@ public func pushScene<VC, Action>(
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
 	Observable.using(
-		Resource.resourceFactory(controller(), dispose: { controller in
-			if let navigation = controller.navigationController,
-			   let index = navigation.viewControllers.firstIndex(of: controller), index > 0 {
-				navigation.popToViewController(navigation.viewControllers[index - 1], animated: animated)
-			}
-		}),
-		observableFactory: Resource.observableFactory { [weak navigation] disposeBag, controller in
-			defer { navigation?.pushViewController(controller, animated: animated) }
+		Resource.buildWeak(
+			{ [weak navigation] () -> VC in
+				let control = controller()
+				navigation?.pushViewController(control, animated: animated)
+				return control
+			},
+			dispose: { controller in
+				if let navigation = controller.navigationController,
+				   let index = navigation.viewControllers.firstIndex(of: controller), index > 0 {
+					navigation.popToViewController(navigation.viewControllers[index - 1], animated: animated)
+				}
+			}),
+		observableFactory: Resource.createObservable { disposeBag, controller in
 			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
 		}
 	)
@@ -104,14 +117,19 @@ public func showScene<VC, Action>(
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
 	Observable.using(
-		Resource.resourceFactory(controller(), dispose: { controller in
-			if let navigation = controller.navigationController,
-			   let index = navigation.viewControllers.firstIndex(of: controller), index > 0 {
-				navigation.popToViewController(navigation.viewControllers[index - 1], animated: true)
-			}
-		}),
-		observableFactory: Resource.observableFactory { [weak parent] disposeBag, controller in
-			defer { parent?.show(controller, sender: sender) }
+		Resource.buildWeak(
+			{ [weak parent] () -> VC in
+				let control = controller()
+				parent?.show(control, sender: sender)
+				return control
+			},
+			dispose: { controller in
+				if let navigation = controller.navigationController,
+				   let index = navigation.viewControllers.firstIndex(of: controller), index > 0 {
+					navigation.popToViewController(navigation.viewControllers[index - 1], animated: true)
+				}
+			}),
+		observableFactory: Resource.createObservable { disposeBag, controller in
 			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
 		}
 	)
@@ -124,14 +142,20 @@ public func showDetailScene<VC, Action>(
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
 	Observable.using(
-		Resource.resourceFactory(controller(), dispose: { controller in
-			if let navigation = controller.navigationController,
-			   let index = navigation.viewControllers.firstIndex(of: controller), index > 0 {
-				navigation.popToViewController(navigation.viewControllers[index - 1], animated: true)
-			}
-		}),
-		observableFactory: Resource.observableFactory { [weak parent] disposeBag, controller in
-			defer { parent?.showDetailViewController(controller, sender: sender) }
+		Resource.buildWeak(
+			{ [weak parent] () -> VC in
+				let control = controller()
+				parent?.showDetailViewController(control, sender: sender)
+				return control
+			},
+			dispose: { controller in
+				if let navigation = controller.navigationController,
+				   let index = navigation.viewControllers.firstIndex(of: controller), index > 0 {
+					navigation.popToViewController(navigation.viewControllers[index - 1], animated: true)
+				}
+			}),
+		observableFactory: Resource.createObservable { disposeBag, controller in
+			defer {  }
 			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
 		}
 	)
@@ -150,7 +174,7 @@ private func wrapAction<VC, Action>(
 	controller: VC,
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
-	let action = controller.rx.viewDidLoad
+	let action = Observable.merge(controller.rx.viewDidLoad, controller.isViewLoaded ? .just(()) : .empty())
 		.take(1)
 		.flatMap { [weak controller] () -> Observable<Action> in
 			guard let controller = controller else { return .empty() }
@@ -169,3 +193,5 @@ private extension Reactive where Base: UIViewController {
 			.map { _ in }
 	}
 }
+
+struct MissingParent: Error { }
