@@ -1,1 +1,2 @@
 *.resolved
+.swiftpm/xcode/package.xcworkspace/xcuserdata
