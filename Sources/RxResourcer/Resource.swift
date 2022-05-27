@@ -1,18 +1,18 @@
+//
+//  Scene.swift
+//
+//  Created by Daniel Tartaglia on 19 May 2022.
+//  Copyright © 2021 Daniel Tartaglia. MIT License.
+//
+
 import RxSwift
 
-public final class Resource<Asset>: Disposable where Asset: AnyObject {
+public final class Resource<Asset>: Disposable {
 	public static func build(
 		_ asset: @autoclosure @escaping () throws -> Asset,
 		dispose: @escaping (Asset) -> Void
 	) -> () throws -> Resource<Asset> {
-		{ Resource(strongAsset: try asset(), weakAsset: nil, dispose: dispose) }
-	}
-
-	public static func buildWeak(
-		_ asset: @escaping () throws -> Asset,
-		dispose: @escaping (Asset) -> Void
-	) -> () throws -> Resource<Asset> {
-		{ Resource(strongAsset: nil, weakAsset: try asset(), dispose: dispose) }
+		{ Resource(asset: try asset(), dispose: dispose) }
 	}
 
 	public static func createObservable<Action>(
@@ -24,23 +24,25 @@ public final class Resource<Asset>: Disposable where Asset: AnyObject {
 		}
 	}
 
-	private let strongAsset: Asset?
-	private weak var weakAsset: Asset?
+	private let asset: Asset?
 	private let _dispose: (Asset) -> Void
 	private let disposeBag = DisposeBag()
 
-	private var asset: Asset? {
-		weakAsset ?? strongAsset
-	}
-
-	private init(strongAsset: Asset?, weakAsset: Asset?, dispose: @escaping (Asset) -> Void) {
-		self.strongAsset = strongAsset
-		self.weakAsset = weakAsset
+	init(asset: Asset?, dispose: @escaping (Asset) -> Void) {
+		self.asset = asset
 		self._dispose = dispose
 	}
 
 	public func dispose() {
 		guard let asset = asset else { return }
 		_dispose(asset)
+	}
+}
+
+extension Resource where Asset: Disposable {
+	public static func build(
+		_ asset: @autoclosure @escaping () throws -> Asset
+	) -> () throws -> Resource<Asset> {
+		{ Resource(asset: try asset(), dispose: { $0.dispose() }) }
 	}
 }

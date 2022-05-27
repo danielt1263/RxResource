@@ -10,7 +10,7 @@ final class ResourcerTests: XCTestCase {
 			XCTAssertEqual(testAsset.value, "example")
 			disposeCalled = true
 		}
-		let resourceFactory = Resource.resourceFactory(TestAsset(value: "example"), dispose: mockDispose)
+		let resourceFactory = Resource.build(TestAsset(value: "example"), dispose: mockDispose)
 		XCTAssertFalse(TestAsset.created)
 		let resource = try resourceFactory()
 		XCTAssert(TestAsset.created)
@@ -25,7 +25,7 @@ final class ResourcerTests: XCTestCase {
 			generateCalled = true
 			return .just(testAsset.value)
 		}
-		let observableFactory = Resource<TestAsset>.observableFactory(mockGenerate(disposeBag:testAsset:))
+		let observableFactory = Resource<TestAsset>.createObservable(mockGenerate(disposeBag:testAsset:))
 		XCTAssertFalse(generateCalled)
 		let resource = Resource(asset: TestAsset(value: "example1"), dispose: { _ in })
 		let action = observableFactory(resource)
