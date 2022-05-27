@@ -34,7 +34,7 @@ class CycleTests: XCTestCase {
 		}
 
 		let result = scheduler.start {
-			cycle(inputs: [input], logic: logic, effect: effect)
+			cycle(input: input, logic: logic, effect: effect)
 		}
 
 		XCTAssertEqual(result.events, [
