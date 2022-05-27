@@ -175,7 +175,7 @@ class NavigationCoordinator<VC>: Disposable where VC: UIViewController {
 
 	func dispose() {
 		if let navigation = navigation, let controller = controller,
-		   let index = navigation.viewControllers.firstIndex(of: controller),
+		   let index = navigation.viewControllers.firstIndex(where: { $0 === controller }),
 		   index > 0 {
 			navigation.popToViewController(navigation.viewControllers[index - 1], animated: animated)
 		}
@@ -191,9 +191,8 @@ class ShowCoordinator<VC>: Disposable where VC: UIViewController {
 	}
 
 	func dispose() {
-		if let controller = controller,
-		   let navigation = controller.navigationController,
-		   let index = navigation.viewControllers.firstIndex(of: controller),
+		if let controller = controller, let navigation = controller.navigationController,
+		   let index = navigation.viewControllers.firstIndex(where: { $0 === controller }),
 		   index > 0 {
 			navigation.popToViewController(navigation.viewControllers[index - 1], animated: true)
 		}
