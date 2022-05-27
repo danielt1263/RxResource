@@ -1,21 +1,23 @@
 import RxSwift
 import XCTest
-@testable import RxResourcer
+@testable import RxResource
 
 final class ResourcerTests: XCTestCase {
-    func testResourceFactory() throws {
+    func testBuild() throws {
 		TestAsset.created = false
 		var disposeCalled = false
 		func mockDispose(testAsset: TestAsset) {
 			XCTAssertEqual(testAsset.value, "example")
 			disposeCalled = true
 		}
+
 		let resourceFactory = Resource.build(TestAsset(value: "example"), dispose: mockDispose)
-		XCTAssertFalse(TestAsset.created)
+
+		XCTAssertFalse(TestAsset.created) // creating the resource factory doesn't create the asset
 		let resource = try resourceFactory()
-		XCTAssert(TestAsset.created)
+		XCTAssert(TestAsset.created) // creating the resource does create the asset
 		resource.dispose()
-		XCTAssert(disposeCalled)
+		XCTAssert(disposeCalled) // disposing the resource disposes the asset
 	}
 
 	func testObservableFactory() throws {
@@ -26,18 +28,18 @@ final class ResourcerTests: XCTestCase {
 			return .just(testAsset.value)
 		}
 		let observableFactory = Resource<TestAsset>.createObservable(mockGenerate(disposeBag:testAsset:))
-		XCTAssertFalse(generateCalled)
+		XCTAssertFalse(generateCalled) // creating the factory doesn't call the generator
 		let resource = Resource(asset: TestAsset(value: "example1"), dispose: { _ in })
 		let action = observableFactory(resource)
-		XCTAssert(generateCalled)
+		XCTAssert(generateCalled) // calling the factory calls the generate function
 		_ = action
 			.subscribe(onNext: {
-				XCTAssertEqual($0, "example1")
+				XCTAssertEqual($0, "example1") // subscribing to the result subscribes to the generator output
 			})
 	}
 }
 
-struct TestAsset: Equatable {
+class TestAsset {
 	static var created = false
 	let value: String
 	init(value: String) {
