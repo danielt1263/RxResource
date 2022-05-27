@@ -2,7 +2,7 @@ import RxSwift
 import XCTest
 @testable import RxResource
 
-final class ResourcerTests: XCTestCase {
+final class ResourceTests: XCTestCase {
     func testBuild() throws {
 		TestAsset.created = false
 		var disposeCalled = false
