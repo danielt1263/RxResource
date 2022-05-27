@@ -2,7 +2,7 @@
 //  Scene.swift
 //
 //  Created by Daniel Tartaglia on 19 May 2022.
-//  Copyright © 2021 Daniel Tartaglia. MIT License.
+//  Copyright © 2022 Daniel Tartaglia. MIT License.
 //
 
 import RxCocoa
