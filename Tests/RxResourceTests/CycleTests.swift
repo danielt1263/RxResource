@@ -18,16 +18,16 @@ class CycleTests: XCTestCase {
 			input.scan(into: State()) { state, input in
 				switch input {
 				case .a:
-					state.word += "Hello "
+					state += "Hello "
 				case .b:
-					state.word += "World "
+					state += "World "
 				}
 			}
 		}
-		let effect: (Observable<(State, Input)>) -> Observable<Input> = { request in
+		let effect: (Observable<(State)>) -> Observable<Input> = { request in
 			request
-				.flatMap { (state, input) -> Observable<Input> in
-					guard input == .b else { return .empty() }
+				.flatMap { state -> Observable<Input> in
+					guard state == "Hello World " else { return .empty() }
 					return .just(Input.a)
 						.delay(.seconds(5), scheduler: scheduler)
 				}
@@ -38,21 +38,21 @@ class CycleTests: XCTestCase {
 		}
 
 		XCTAssertEqual(result.events, [
-			.next(202, State(word: "Hello ")),
-			.next(203, State(word: "Hello World ")),
-			.next(208, State(word: "Hello World Hello "))
+			.next(202, "Hello "),
+			.next(203, "Hello World "),
+			.next(208, "Hello World Hello ")
 		])
 	}
 
-	func testFormatted() {
+	func testReducer() {
 		let scheduler = TestScheduler(initialClock: 0)
 		let input = scheduler.createColdObservable([.next(2, Input.a), .next(3, Input.b)]).asObservable()
 		func reduce(state: inout State, input: Input) {
 			switch input {
 			case .a:
-				state.word += "Hello "
+				state += "Hello "
 			case .b:
-				state.word += "World "
+				state += "World "
 			}
 		}
 		let effect: (Observable<(State, Input)>) -> Observable<Input> = { request in
@@ -69,10 +69,10 @@ class CycleTests: XCTestCase {
 		}
 
 		XCTAssertEqual(result.events, [
-			.next(200, State(word: "")),
-			.next(202, State(word: "Hello ")),
-			.next(203, State(word: "Hello World ")),
-			.next(208, State(word: "Hello World Hello "))
+			.next(200, ""),
+			.next(202, "Hello "),
+			.next(203, "Hello World "),
+			.next(208, "Hello World Hello ")
 		])
 	}
 }
@@ -82,6 +82,4 @@ enum Input {
 	case b
 }
 
-struct State: Equatable {
-	var word: String = ""
-}
+typealias State = String

@@ -18,32 +18,34 @@ public func cycle<State, Input>(
 	cycle(
 		input: Observable.merge(inputs),
 		logic: { input in
-			input.scan(into: initialState, accumulator: reduce).startWith(initialState)
+			let sharedInput = input
+				.share(replay: 1)
+			return Observable.zip(sharedInput.scan(into: initialState, accumulator: reduce), sharedInput)
 		},
 		effect: { action in
 			Observable.merge(effects.map { $0(action) })
 		})
+		.map { $0.0 }
+		.startWith(initialState)
 }
 
-public func cycle<State, Input>(
+public func cycle<Output, Input>(
 	input: Observable<Input>,
-	logic: @escaping (Observable<Input>) -> Observable<State>,
-	effect: @escaping (Observable<(State, Input)>) -> Observable<Input>
-) -> Observable<State> {
+	logic: @escaping (Observable<Input>) -> Observable<Output>,
+	effect: @escaping (Observable<Output>) -> Observable<Input>
+) -> Observable<Output> {
 	Observable.using(
 		Resource.build(PublishSubject<Input>()),
 		observableFactory: Resource.createObservable { disposeBag, subject in
-			let outsideInput = input
+			let sharedInput = input
 				.share(replay: 1)
-			let allInputs = Observable.merge(outsideInput, subject)
-				.take(until: outsideInput.takeLast(1))
+			let state = logic(Observable.merge(sharedInput, subject))
 				.share(replay: 1)
-			let state = logic(allInputs)
-				.share(replay: 1)
-			let reactionInput = Observable.zip(state, allInputs)
-			effect(reactionInput)
+			effect(state)
+				.take(until: sharedInput.takeLast(1))
 				.subscribe(subject)
 				.disposed(by: disposeBag)
 			return state
-		})
+		}
+	)
 }
