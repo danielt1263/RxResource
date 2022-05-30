@@ -30,7 +30,7 @@ public func assignScene<VC, Action>(
 	controller: VC,
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> (controller: VC, action: Observable<Action>) where VC: UIViewController {
-	return (controller, wrapAction(disposeBag: disposeBag, controller: controller, configure: configure))
+	(controller, wrapAction(disposeBag: disposeBag, controller: controller, configure: configure))
 }
 
 public func presentScene<VC, Action>(
