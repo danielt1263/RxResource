@@ -1,3 +1,5 @@
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdanielt1263%2FRxResource%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/danielt1263/RxResource) [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fdanielt1263%2FRxResource%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/danielt1263/RxResource)
+
 # RxResource
 
 This package includes a `Resource` generic type that makes it easier to wrap objects for use with the `Observable.using(_:observableFactory:)` operator. It also includes several samples.
