@@ -155,7 +155,7 @@ class PresentationCoordinator<VC>: Disposable where VC: UIViewController {
 
 	func dispose() {
 		guard let parent = parent, let child = child else { return }
-		if parent.presentedViewController === child {
+		if parent.presentedViewController === child && !child.isBeingDismissed {
 			parent.dismiss(animated: animated)
 		}
 	}
