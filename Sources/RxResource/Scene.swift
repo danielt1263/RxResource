@@ -10,11 +10,7 @@ import RxSwift
 import UIKit
 
 public extension NSObjectProtocol where Self: UIViewController {
-	static func fromStoryboard(
-		storyboardName: String = "",
-		bundle: Bundle? = nil,
-		identifier: String = ""
-	) -> Self {
+	static func fromStoryboard(storyboardName: String = "", bundle: Bundle? = nil, identifier: String = "") -> Self {
 		let storyboard = UIStoryboard(
 			name: storyboardName.isEmpty ? String(describing: self) : storyboardName,
 			bundle: bundle
@@ -35,14 +31,13 @@ public func assignScene<VC, Action>(
 
 public func presentScene<VC, Action>(
 	controller: @autoclosure @escaping () -> VC,
-	from parent: UIViewController?,
 	animated: Bool,
 	over sourceView: UIView? = nil,
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
 	Observable.using(
 		Resource.build(
-			PresentationCoordinator(parent: parent, child: controller(), sourceView: sourceView, animated: animated)
+			PresentationCoordinator(child: controller(), sourceView: sourceView, animated: animated)
 		),
 		observableFactory: Resource.createObservable { disposeBag, state in
 			guard let child = state.child else { return .empty() }
@@ -53,14 +48,12 @@ public func presentScene<VC, Action>(
 
 public func presentScene<VC, Action>(
 	controller: @autoclosure @escaping () -> VC,
-	from parent: UIViewController?,
 	animated: Bool,
 	over barButtonItem: UIBarButtonItem,
 	configure: @escaping (DisposeBag, VC) -> Observable<Action>
 ) -> Observable<Action> where VC: UIViewController {
 	Observable.using(
 		Resource.build(PresentationCoordinator(
-			parent: parent,
 			child: controller(),
 			barButtonItem: barButtonItem,
 			animated: animated
@@ -131,33 +124,72 @@ class PresentationCoordinator<VC>: Disposable where VC: UIViewController {
 	weak var child: VC?
 	let animated: Bool
 
-	init(parent: UIViewController?, child: VC, barButtonItem: UIBarButtonItem, animated: Bool) {
-		self.parent = parent
+	init(child: VC, barButtonItem: UIBarButtonItem, animated: Bool) {
 		self.child = child
 		self.animated = animated
-		if let popoverPresentationController = child.popoverPresentationController {
-			popoverPresentationController.barButtonItem = barButtonItem
+		queue.async {
+			let semaphore = DispatchSemaphore(value: 0)
+			DispatchQueue.main.async {
+				let parent = UIViewController.top()
+				self.parent = parent
+				if let popoverPresentationController = child.popoverPresentationController {
+					popoverPresentationController.barButtonItem = barButtonItem
+				}
+				parent.present(child, animated: animated) {
+					semaphore.signal()
+				}
+			}
+			semaphore.wait()
 		}
-		parent?.present(child, animated: animated)
 	}
 
-	init(parent: UIViewController?, child: VC, sourceView: UIView?, animated: Bool) {
-		self.parent = parent
+	init(child: VC, sourceView: UIView?, animated: Bool) {
 		self.child = child
 		self.animated = animated
-		if let popoverPresentationController = child.popoverPresentationController,
-		   let sourceView = sourceView {
-			popoverPresentationController.sourceView = sourceView
-			popoverPresentationController.sourceRect = sourceView.bounds
+		queue.async {
+			let semaphore = DispatchSemaphore(value: 0)
+			DispatchQueue.main.async {
+				let parent = UIViewController.top()
+				self.parent = parent
+				if let popoverPresentationController = child.popoverPresentationController,
+				   let sourceView = sourceView {
+					popoverPresentationController.sourceView = sourceView
+					popoverPresentationController.sourceRect = sourceView.bounds
+				}
+				parent.present(child, animated: animated) {
+					semaphore.signal()
+				}
+			}
+			semaphore.wait()
 		}
-		parent?.present(child, animated: animated)
 	}
 
 	func dispose() {
-		guard let parent = parent, let child = child else { return }
-		if parent.presentedViewController === child && !child.isBeingDismissed {
-			parent.dismiss(animated: animated)
+		queue.async { [weak parent, weak child, animated] in
+			let semaphore = DispatchSemaphore(value: 0)
+			DispatchQueue.main.async {
+				guard let parent = parent, let child = child else { semaphore.signal(); return }
+				if parent.presentedViewController === child && !child.isBeingDismissed {
+					parent.dismiss(animated: animated) {
+						semaphore.signal()
+					}
+				}
+			}
+			semaphore.wait()
 		}
+	}
+}
+
+private let queue = DispatchQueue(label: "ScenePresentationHandler")
+
+private extension UIViewController {
+	static func top() -> UIViewController {
+		guard let rootViewController = UIApplication.shared.delegate?.window??.rootViewController else { fatalError("No view controller present in app?") }
+		var result = rootViewController
+		while let vc = result.presentedViewController, !vc.isBeingDismissed {
+			result = vc
+		}
+		return result
 	}
 }
 
