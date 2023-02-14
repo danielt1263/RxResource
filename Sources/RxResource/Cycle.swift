@@ -43,7 +43,6 @@ public func cycle<Output, Input>(
 				.share(replay: 1)
 			effect(state)
 				.take(until: sharedInput.takeLast(1))
-				.observe(on: MainScheduler.asyncInstance)
 				.subscribe(subject)
 				.disposed(by: disposeBag)
 			return state
