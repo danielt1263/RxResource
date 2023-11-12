@@ -7,26 +7,34 @@
 
 import RxSwift
 
-public typealias Reaction<State, Input> = (Observable<(State, Input)>) -> Observable<Input>
+public typealias Effect<State, Input> = (Observable<(State, Input)>) -> Observable<Input>
 
 public func cycle<State, Input>(
 	inputs: [Observable<Input>],
 	initialState: State,
 	reduce: @escaping (inout State, Input) -> Void,
-	effects: [(Observable<(State, Input)>) -> Observable<Input>]
+	effects: [Effect<State, Input>]
 ) -> Observable<State> {
-	cycle(
-		input: Observable.merge(inputs),
-		logic: { input in
-			let sharedInput = input
+	Observable.using(
+		Resource.build(PublishSubject<Input>()),
+		observableFactory: Resource.createObservable { disposeBag, subject in
+			let outsideInputs = Observable.merge(inputs)
 				.share(replay: 1)
-			return Observable.zip(sharedInput.scan(into: initialState, accumulator: reduce), sharedInput)
-		},
-		effect: { action in
-			Observable.merge(effects.map { $0(action) })
-		})
-		.map { $0.0 }
-		.startWith(initialState)
+			let inputs = Observable.merge(outsideInputs, subject.asObservable())
+				.share(replay: 1)
+			let state = inputs
+				.scan(into: initialState, accumulator: reduce)
+				.startWith(initialState)
+				.share(replay: 1)
+
+			Observable.merge(effects.map { $0(Observable.zip(state, inputs)) })
+				.subscribe(subject)
+				.disposed(by: disposeBag)
+
+			return state
+				.take(until: outsideInputs.materialize().takeLast(1))
+		}
+	)
 }
 
 public func cycle<Output, Input>(
@@ -40,9 +48,9 @@ public func cycle<Output, Input>(
 			let sharedInput = input
 				.share(replay: 1)
 			let state = logic(Observable.merge(sharedInput, subject))
+				.take(until: sharedInput.takeLast(1))
 				.share(replay: 1)
 			effect(state)
-				.take(until: sharedInput.takeLast(1))
 				.subscribe(subject)
 				.disposed(by: disposeBag)
 			return state
