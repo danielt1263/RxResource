@@ -23,147 +23,170 @@ public extension NSObjectProtocol where Self: UIViewController {
 		storyboard.instantiateInitialViewController() as! Self :
 		storyboard.instantiateViewController(withIdentifier: identifier) as! Self
 	}
+
+	func action<Action>(
+		disposeBag: DisposeBag,
+		configure: @escaping (DisposeBag, Self) -> Observable<Action>
+	) -> Observable<Action> {
+		wrapAction(disposeBag: disposeBag, coordinator: StaticCoordinator(controller: self), configure: configure)
+	}
 }
 
-public func scene<VC, Action>(
-	disposeBag: DisposeBag,
-	controller: VC,
-	configure: @escaping (DisposeBag, VC) -> Observable<Action>
-) -> (controller: VC, action: Observable<Action>)
-where VC: UIViewController {
-	(controller, wrapAction(disposeBag: disposeBag, controller: controller, configure: configure))
-}
-
-public func presentScene<VC, Action>(
-	controller: @autoclosure @escaping () -> VC,
-	from parent: UIViewController?,
-	animated: Bool,
-	over sourceView: UIView? = nil,
-	configure: @escaping (DisposeBag, VC) -> Observable<Action>
-) -> Observable<Action>
-where VC: UIViewController {
-	Observable.using(
-		Resource.build(
-			PresentationCoordinator(parent: parent, child: controller(), sourceView: sourceView, animated: animated)
-		),
-		observableFactory: Resource.createObservable { disposeBag, state in
-			guard let child = state.child else { return .empty() }
-			return wrapAction(disposeBag: disposeBag, controller: child, configure: configure)
-		}
-	)
-}
-
-public func presentScene<VC, Action>(
-	controller: @autoclosure @escaping () -> VC,
-	from parent: UIViewController?,
-	animated: Bool,
-	over barButtonItem: UIBarButtonItem,
-	configure: @escaping (DisposeBag, VC) -> Observable<Action>
-) -> Observable<Action> where VC: UIViewController {
-	Observable.using(
-		Resource.build(PresentationCoordinator(
-			parent: parent,
-			child: controller(),
-			barButtonItem: barButtonItem,
-			animated: animated
-		)),
-		observableFactory: Resource.createObservable { disposeBag, state in
-			guard let child = state.child else { return .empty() }
-			return wrapAction(disposeBag: disposeBag, controller: child, configure: configure)
-		}
-	)
-}
-
-public func pushScene<VC, Action>(
-	controller: @autoclosure @escaping () -> VC,
-	from navigation: UINavigationController?,
-	animated: Bool,
-	configure: @escaping (DisposeBag, VC) -> Observable<Action>
-) -> Observable<Action> where VC: UIViewController {
-	Observable.using(
-		Resource.build(NavigationCoordinator(navigation: navigation, controller: controller(), animated: animated)),
-		observableFactory: Resource.createObservable { disposeBag, coordinator in
-			guard let controller = coordinator.controller else { return .empty() }
-			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
-		}
-	)
-}
-
-public func showScene<VC, Action>(
-	controller: @autoclosure @escaping () -> VC,
-	from parent: UIViewController?,
-	sender: Any? = nil,
-	configure: @escaping (DisposeBag, VC) -> Observable<Action>
-) -> Observable<Action> where VC: UIViewController {
-	Observable.using(
-		Resource.build(ShowCoordinator(
-			parent: parent,
-			child: controller(),
-			sender: sender, show: parent?.show(_:sender:)
-		)),
-		observableFactory: Resource.createObservable { disposeBag, coordinator in
-			guard let controller = coordinator.controller else { return .empty() }
-			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
-		}
-	)
-}
-
-public func showDetailScene<VC, Action>(
-	controller: @autoclosure @escaping () -> VC,
-	from parent: UIViewController?,
-	sender: Any? = nil,
-	configure: @escaping (DisposeBag, VC) -> Observable<Action>
-) -> Observable<Action> where VC: UIViewController {
-	Observable.using(
-		Resource.build(ShowCoordinator(
-			parent: parent,
-			child: controller(),
-			sender: sender,
-			show: parent?.showDetailViewController(_:sender:)
-		)),
-		observableFactory: Resource.createObservable { disposeBag, coordinator in
-			guard let controller = coordinator.controller else { return .empty() }
-			return wrapAction(disposeBag: disposeBag, controller: controller, configure: configure)
-		}
-	)
-}
-
-class PresentationCoordinator<VC>: Disposable where VC: UIViewController {
-	weak var parent: UIViewController?
-	weak var child: VC?
-	let animated: Bool
-
-	init(parent: UIViewController?, child: VC, barButtonItem: UIBarButtonItem, animated: Bool) {
-		self.parent = parent
-		self.child = child
-		self.animated = animated
-		if let popoverPresentationController = child.popoverPresentationController {
-			popoverPresentationController.barButtonItem = barButtonItem
-		}
-		parent?.present(child, animated: animated)
+extension UIViewController {
+	public func present<VC, Action>(
+		controller: @autoclosure @escaping () -> VC,
+		animated: Bool,
+		over sourceView: UIView? = nil,
+		configure: @escaping (DisposeBag, VC) -> Observable<Action>
+	) -> Observable<Action>
+	where VC: UIViewController {
+		Observable.using(
+			Resource.build(
+				PresentationCoordinator(
+					parent: self,
+					child: controller(),
+					animated: animated,
+					assignToPopover: sourceView.map { assignToPopover($0) }
+				)
+			),
+			observableFactory: Resource.createObservable { disposeBag, coordinator in
+				return wrapAction(disposeBag: disposeBag, coordinator: coordinator, configure: configure)
+			}
+		)
 	}
 
-	init(parent: UIViewController?, child: VC, sourceView: UIView?, animated: Bool) {
-		self.parent = parent
-		self.child = child
-		self.animated = animated
-		if let popoverPresentationController = child.popoverPresentationController,
-		   let sourceView = sourceView {
-			popoverPresentationController.sourceView = sourceView
-			popoverPresentationController.sourceRect = sourceView.bounds
-		}
-		parent?.present(child, animated: animated)
+	public func present<VC, Action>(
+		controller: @autoclosure @escaping () -> VC,
+		animated: Bool,
+		over barButtonItem: UIBarButtonItem,
+		configure: @escaping (DisposeBag, VC) -> Observable<Action>
+	) -> Observable<Action> where VC: UIViewController {
+		Observable.using(
+			Resource.build(
+				PresentationCoordinator(
+					parent: self,
+					child: controller(),
+					animated: animated,
+					assignToPopover: assignToPopover(barButtonItem)
+				)
+			),
+			observableFactory: Resource.createObservable { disposeBag, coordinator in
+				return wrapAction(disposeBag: disposeBag, coordinator: coordinator, configure: configure)
+			}
+		)
+	}
+
+	public func show<VC, Action>(
+		controller: @autoclosure @escaping () -> VC,
+		sender: Any? = nil,
+		configure: @escaping (DisposeBag, VC) -> Observable<Action>
+	) -> Observable<Action> where VC: UIViewController {
+		Observable.using(
+			Resource.build(ShowCoordinator(
+				child: controller(),
+				sender: sender,
+				show: self.show(_:sender:)
+			)),
+			observableFactory: Resource.createObservable { disposeBag, coordinator in
+				return wrapAction(disposeBag: disposeBag, coordinator: coordinator, configure: configure)
+			}
+		)
+	}
+
+	public func showDetail<VC, Action>(
+		controller: @autoclosure @escaping () -> VC,
+		sender: Any? = nil,
+		configure: @escaping (DisposeBag, VC) -> Observable<Action>
+	) -> Observable<Action> where VC: UIViewController {
+		Observable.using(
+			Resource.build(ShowCoordinator(
+				child: controller(),
+				sender: sender,
+				show: self.showDetailViewController(_:sender:)
+			)),
+			observableFactory: Resource.createObservable { disposeBag, coordinator in
+				return wrapAction(disposeBag: disposeBag, coordinator: coordinator, configure: configure)
+			}
+		)
+	}
+}
+
+extension UINavigationController {
+	public func push<VC, Action>(
+		controller: @autoclosure @escaping () -> VC,
+		animated: Bool,
+		configure: @escaping (DisposeBag, VC) -> Observable<Action>
+	) -> Observable<Action> where VC: UIViewController {
+		Observable.using(
+			Resource.build(NavigationCoordinator(navigation: self, controller: controller(), animated: animated)),
+			observableFactory: Resource.createObservable { disposeBag, coordinator in
+				return wrapAction(disposeBag: disposeBag, coordinator: coordinator, configure: configure)
+			}
+		)
+	}
+}
+
+private protocol Coordinator: Disposable {
+	associatedtype VC: UIViewController
+	var controller: VC? { get }
+}
+
+private class StaticCoordinator<VC>: Coordinator where VC: UIViewController {
+	weak var controller: VC?
+	init(controller: VC) {
+		self.controller = controller
 	}
 
 	func dispose() {
-		guard let parent = parent, let child = child else { return }
-		if parent.presentedViewController === child && !child.isBeingDismissed {
-			parent.dismiss(animated: animated)
+		controller = nil
+	}
+}
+
+private class PresentationCoordinator<VC>: Coordinator where VC: UIViewController {
+	weak var controller: VC?
+	let animated: Bool
+
+	init(parent: UIViewController?, child: VC, animated: Bool, assignToPopover: ((UIPopoverPresentationController) -> Void)?) {
+		self.controller = child
+		self.animated = animated
+		queue.async { [weak parent] in
+			let semaphore = DispatchSemaphore(value: 0)
+			DispatchQueue.main.async {
+				if let assignToPopover {
+					child.modalPresentationStyle = .popover
+					if let popoverPresentationController = child.popoverPresentationController {
+						assignToPopover(popoverPresentationController)
+					}
+				}
+				parent?.topMost().present(child, animated: animated, completion: {
+					semaphore.signal()
+				})
+			}
+			semaphore.wait()
+		}
+	}
+
+	func dispose() {
+		queue.async { [weak controller, animated] in
+			let semaphore = DispatchSemaphore(value: 0)
+			DispatchQueue.main.async {
+				if let parent = controller?.presentingViewController, controller!.isBeingDismissed == false {
+					parent.dismiss(animated: animated, completion: {
+						semaphore.signal()
+					})
+				}
+				else {
+					semaphore.signal()
+				}
+			}
+			semaphore.wait()
 		}
 	}
 }
 
-class NavigationCoordinator<VC>: Disposable where VC: UIViewController {
+private let queue = DispatchQueue(label: "ScenePresentationHandler")
+
+private class NavigationCoordinator<VC>: Coordinator where VC: UIViewController {
 	weak var navigation: UINavigationController?
 	weak var controller: VC?
 	let animated: Bool
@@ -184,10 +207,10 @@ class NavigationCoordinator<VC>: Disposable where VC: UIViewController {
 	}
 }
 
-class ShowCoordinator<VC>: Disposable where VC: UIViewController {
+private class ShowCoordinator<VC>: Coordinator where VC: UIViewController {
 	weak var controller: VC?
 
-	init(parent: UIViewController?, child: VC, sender: Any?, show: ((UIViewController, Any?) -> Void)?) {
+	init(child: VC, sender: Any?, show: ((UIViewController, Any?) -> Void)?) {
 		self.controller = child
 		show?(child, sender)
 	}
@@ -201,12 +224,13 @@ class ShowCoordinator<VC>: Disposable where VC: UIViewController {
 	}
 }
 
-private func wrapAction<VC, Action>(
+private func wrapAction<Coord, Action>(
 	disposeBag: DisposeBag,
-	controller: VC,
-	configure: @escaping (DisposeBag, VC) -> Observable<Action>
+	coordinator: Coord,
+	configure: @escaping (DisposeBag, Coord.VC) -> Observable<Action>
 ) -> Observable<Action>
-where VC: UIViewController {
+where Coord: Coordinator {
+	guard let controller = coordinator.controller else { return Observable.empty() }
 	let action = Observable.merge(controller.rx.viewDidLoad, controller.isViewLoaded ? .just(()) : .empty())
 		.take(1)
 		.flatMap { [weak controller] in
@@ -217,6 +241,33 @@ where VC: UIViewController {
 	action.connect()
 		.disposed(by: disposeBag)
 	return action
+		.do(
+			onError: { _ in coordinator.dispose() },
+			onCompleted: { coordinator.dispose() }
+		)
+}
+
+private func assignToPopover(_ barButtonItem: UIBarButtonItem) -> (UIPopoverPresentationController) -> Void {
+	{ popoverPresentationController in
+		popoverPresentationController.barButtonItem = barButtonItem
+	}
+}
+
+private func assignToPopover(_ sourceView: UIView) -> (UIPopoverPresentationController) -> Void {
+	{ popoverPresentationController in
+		popoverPresentationController.sourceView = sourceView
+		popoverPresentationController.sourceRect = sourceView.bounds
+	}
+}
+
+private extension UIViewController {
+	func topMost() -> UIViewController {
+		var result = self
+		while let vc = result.presentedViewController, !vc.isBeingDismissed {
+			result = vc
+		}
+		return result
+	}
 }
 
 private extension Reactive where Base: UIViewController {
